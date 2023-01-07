@@ -62,10 +62,10 @@ function init()
   end)
   params:add_number("lowerNumber", "Lower Number", 1, 32, 4)
   params:set_action("lowerNumber", function lower_update(x)
-      lowerNumber = x
-      --totalBeats = 192 * beatsAmount
-      --something to recalculate the bings
-    end)
+    lowerNumber = x
+    --totalBeats = 192 * beatsAmount
+    --something to recalculate the bings
+  end)
   params:bang() -- set defaults using above params
   --end params
 
@@ -74,6 +74,7 @@ function init()
   --resolutions = {1,2,3,4,6,8,12,16,24,32,48,64,96,128,192}
 
   --drawing stuff
+  beatScreen = 0 --screen level: set to 15 when the metronome pings to flash the screen
   heldKeys = {false, false, false}
   isPlaying = false -- are we playing right now?
 
@@ -95,11 +96,32 @@ function drawView()
   --set inversion based on whether we're in a big or sub beat
 
   --draw black or white background
+  screen.level(beatScreen)
+  screen.rect(0,0,127,63)
+  screen.fill()
   
   --draw white or black text
+  screen.level(15 - beatScreen)
+  
+  --what view we in?
+  screen.move(0,0)
+  if mainView then screen.text("Levels")
+  else screen.text("Signature") end
+  
+  -- could we highlight stuff depending what view we're in?
+  
   --time signature, big nice text
+  screen.move(64,64)
+  screen.text(upperNumber)
+  screen.move(64,74)
+  screen.text(lowerNumber)
   --tempo
+  screen.move(10,120)
+  screen.text(clock.get_tempo())
   --count
+  --programmatically, draw text representing the counts in the count
+  -- e.g. ONE two three FOUR five
+  --etc
 
 end
 
@@ -115,21 +137,21 @@ end
 function enc(e, d)
 
   if e == 1 and mainView then
-  
+    -- set new tempo
   else
-  
+    -- set subdivions length (counting inside the bar)
   end
   
   if e == 2 and mainView then
-  
+    -- set big beat playback sound
   else
-  
+    -- set upper number
   end
   
   if e == 3 and mainView then
-  
+    --set small beat playback sound
   else 
-  
+    -- set lower number
   end
 
 end
@@ -137,11 +159,12 @@ end
 function key(k, z)
   
   if k == 2 then
-  
+    --toggle play
   end
   
-  if k == 3 then
-  
+  if k == 3 then -- togle view
+    if mainView then mainView = false
+    else mainView = true end
   end
 
 end
