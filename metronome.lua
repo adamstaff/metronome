@@ -24,16 +24,28 @@ fileselect = require "fileselect"
 --tick along
 function ticker()
   while isPlaying do
-    --loop clock
-    if (clockPosition > totalBeats) then clockPosition = 0 end
-    --check if it's time for an event
-    if (clockPosition == **some definition of position**) then
-      --play a sound
-      --set screen levels
+    if clockPosition > count.whole then -- we're on the barline
+      clockPosition = 0  --loop clock
+      count.smallBeat = false
+      count.bigBeat = true
       screen_dirty = true
+    else if clockPosision % count.subBeatLength == 0 then -- we're on a subcount
+      --play a big sound
+      count.smallBeat = false
+      count.bigBeat = true
+      screen_dirty = true
+    else if clockPosition % count.beatLength == 0 then -- we're on a small beat
+      -- play a small sound
+      count.bigBeat = false
+      count.smallBeat = true
+      screen_dirty = true
+    else 
+      --anything here?
+      --count.bigBeat = false
+      --count.smallBeat = false
     end
     clockPosition = clockPosition + tick -- move to next clock position
-    clock.sync(1/192) -- and wait
+    clock.sync(1/192) -- and wait for a tick
   end
 end
 
@@ -50,26 +62,37 @@ end
 function init()
   redraw_clock_id = clock.run(redraw_clock) --add these for other clocks so we can kill them at the end
 
-  --params
-  beatsAmount = 0 -- number of beats to sequence
-  totalBeats = 0 -- number of ticks for the sequencer clock
   -- start params
   params:add_separator("Metronome")
   params:add_number("upperNumber", "Upper Number", 1, 128, 4)
   params:set_action("upperNumber",   function upper_update(x)
-    uppernumber = x
-    -- something to recalculate tick length
+    uppernumber = upperNumber + x
+    count.recalculate()
   end)
   params:add_number("lowerNumber", "Lower Number", 1, 32, 4)
   params:set_action("lowerNumber", function lower_update(x)
-    lowerNumber = x
-    --totalBeats = 192 * beatsAmount
-    --something to recalculate the bings
+    lowerNumber = lowerNumber + x
+    count.recalculate()
   end)
+  params:add_number("subcount", "Small Count", 0, upperNumber, 4)
+  params:set_action("subcount", function subcount_update(x)
+    subcount = util.clamp(subcount + x, 1, upperNumber)
+  end)  
   params:bang() -- set defaults using above params
   --end params
+  
+  count = {}
+  count.beatLength = 0
+  count.subBeatLength = 0
+  count.whole = 768
+  count.recalculate = function()
+    count.beatLength = count.whole / lowerNumber
+    count.subBeatLength = count.beatLength * subcount
+  end
+  count.bigBeat = false
+  count.smallBeat = false
 
--- could use these to make the lower number start with powers of 2?
+  --could use these to make the lower number start with powers of 2?
   --segmentLength = 6 -- index to read from resolutions, i.e. resolutions[segmentLength]
   --resolutions = {1,2,3,4,6,8,12,16,24,32,48,64,96,128,192}
 
@@ -93,7 +116,10 @@ end
 -- draws the view
 function drawView()
 
-  --set inversion based on whether we're in a big or sub beat
+  --set screen level based on whether we're in a big or sub beat
+  if count.bigBeat then beatScreen = 15 
+  else if count.smallBeat then beatScreen = 4 
+  else beatScreen = 0 end
 
   --draw black or white background
   screen.level(beatScreen)
@@ -122,6 +148,8 @@ function drawView()
   --programmatically, draw text representing the counts in the count
   -- e.g. ONE two three FOUR five
   --etc
+  
+  screen.fill()
 
 end
 
@@ -137,21 +165,22 @@ end
 function enc(e, d)
 
   if e == 1 and mainView then
-    -- set new tempo
+    local tempoh = clock.get_tempo() + d
+    params:set(“clock_tempo”, tempoh)
   else
-    -- set subdivions length (counting inside the bar)
+    subcount_update(d)
   end
   
   if e == 2 and mainView then
     -- set big beat playback sound
   else
-    -- set upper number
+    upper_update(d)
   end
   
   if e == 3 and mainView then
     --set small beat playback sound
   else 
-    -- set lower number
+    lower_update(d)
   end
 
 end
@@ -159,7 +188,8 @@ end
 function key(k, z)
   
   if k == 2 then
-    --toggle play
+    if isPlaying then isPlaying = false
+    else isPlaying = true end
   end
   
   if k == 3 then -- togle view
