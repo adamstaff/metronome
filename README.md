@@ -1,0 +1,16 @@
+-- metronome v0.0.1
+-- Bing, buk, buk, buk
+--
+-- A screen flash and
+-- sound mimic a
+-- metronome
+--
+-- K2 or K3: Start, stop
+--
+-- In Main mode:
+-- E1: Subcount
+-- E2: Whole level
+-- E3: Subdivion level
+--
+-- Hold K1, turn E1:
+-- adjust norns tempo
