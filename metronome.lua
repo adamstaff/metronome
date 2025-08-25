@@ -7,7 +7,6 @@
 --
 -- K2 or K3: Start, stop
 --
--- In Main mode:
 -- E1: Subcount
 -- E2: Whole level
 -- E3: Subdivion level
