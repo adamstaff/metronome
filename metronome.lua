@@ -8,8 +8,8 @@
 -- K2 or K3: Start, stop
 --
 -- E1: Subcount
--- E2: Whole level
--- E3: Subdivion level
+-- E2: Count
+-- E3: Subdivision
 --
 -- Hold K1, turn E1:
 -- adjust norns tempo
@@ -30,13 +30,13 @@ function ticker()
       count.number = math.floor((clockPosition / count.barlength) * params:get("upperNumber") + 1)
       engine.amp(1)
       engine.hz(100)
-    else if clockPosition % count.subBeatLength == 0 then -- we're on a subcount
+    else if math.floor(clockPosition % count.subBeatLength) == 0 then -- we're on a subcount
       --play a big sound
       beatScreen = 6
       count.number = math.floor((clockPosition / count.barlength) * params:get("upperNumber") + 1)
       engine.amp(0.5)
       engine.hz(100)
-    else if clockPosition % count.beatLength == 0 then -- we're on a small beat
+    else if math.floor(clockPosition % count.beatLength) == 0 then -- we're on a small beat
       -- play a small sound
       beatScreen = 3
       count.number = math.floor((clockPosition / count.barlength) * params:get("upperNumber") + 1)
