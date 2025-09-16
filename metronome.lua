@@ -1,4 +1,4 @@
--- metronome v0.0.1
+-- metronome v0.0.2
 -- Bing, buk, buk, buk
 --
 -- A screen flash and
@@ -16,7 +16,9 @@
 
 util = require "util"
 fileselect = require "fileselect"
+MusicUtil = require("musicutil")
 engine.name = 'PolyPerc'
+nb= require "metronome/lib/nb"
 
 local g
 g = grid.connect()
@@ -28,20 +30,17 @@ function ticker()
       clockPosition = 0
       beatScreen = 15
       count.number = math.floor((clockPosition / count.barlength) * params:get("upperNumber") + 1)
-      engine.amp(1)
-      engine.hz(beatFreq)
+			play_something(beatFreq, 1, 1)
     else if math.floor(clockPosition % count.subBeatLength) == 0 then -- we're on a subcount
       --play a big sound
       beatScreen = 6
       count.number = math.floor((clockPosition / count.barlength) * params:get("upperNumber") + 1)
-      engine.amp(0.5)
-      engine.hz(beatFreq)
+			play_something(beatFreq, 0.5, 1)
     else if math.floor(clockPosition % count.beatLength) == 0 then -- we're on a small beat
       -- play a small sound
       beatScreen = 3
       count.number = math.floor((clockPosition / count.barlength) * params:get("upperNumber") + 1)
-      engine.amp(0.5)
-      engine.hz(subBeatFreq)
+      play_something(subBeatFreq, 0.5, 2)
     else
       --anything here?
       count.bigBeat = false
@@ -52,6 +51,26 @@ function ticker()
     clockPosition = clockPosition + tick -- move to next clock position
     clock.sync(1/192) -- and wait for a tick
   end
+end
+
+function play_something(freq, amp, sample)
+	if note_output == 1 then --engine
+		engine.amp(amp)
+		engine.hz(freq) 
+	end
+	if note_output == 2 then --sample
+	  print("playing sample: "..sample.." at amp: "..amp)
+	  softcut.level(sample, amp)
+	  softcut.position(sample, 0)
+	  softcut.play(sample, 1)
+	end
+	if note_output == 3 then --nb
+  	local player = params:lookup_param("voice_id"):get_player()
+    player:play_note(MusicUtil.freq_to_note_num(freq), amp, params:get("engine_decay") / 1000)
+      end
+	if note_output == 4 then --MIDI
+		play_midi_note(MusicUtil.freq_to_note_num(freq), math.floor(64 * amp), params:get("engine_decay") / 1000)
+	end
 end
 
 function redraw_clock() ----- a clock that draws space
@@ -65,6 +84,7 @@ function redraw_clock() ----- a clock that draws space
 end
 
 function init()
+  nb:init()
   redraw_clock_id = clock.run(redraw_clock) --add these for other clocks so we can kill them at the end
   
   --variables
@@ -83,6 +103,23 @@ function init()
   count.number = 1
   beatFreq = 110
   subBeatFreq = 220
+  
+  --voice variables
+  note_destinations = {"engine", "sample", "nb voice", "midi out"}
+	note_output = 1
+  function play_midi_note(note, duration, velocity)  
+    midi_device[midi_target]:note_on(note, velocity)
+    local note_time = clock.get_beat_sec() * duration * 4 - 0.01
+    clock.run(
+      function()
+        clock.sleep(note_time)
+        midi_device[midi_target]:note_off(note, 0)
+      end
+    )
+  end
+  softcut.buffer(1,1)
+  softcut.buffer(2,2)
+
   --end variables
   
   -- start params
@@ -101,16 +138,124 @@ function init()
   end)
   params:add_number("beat_note", "beat note", 0, 127, 36,
     function(param) return MusicUtil.note_num_to_name(param:get(), true) end
-  } 
+  )
   params:set_action("beat_note", function()
     beatFreq = MusicUtil.note_num_to_freq(params:get("beat_note"))
+  end
   ) 
   params:add_number("sub_beat_note", "sub beat note", 0, 127, 48,
     function(param) return MusicUtil.note_num_to_name(param:get(), true) end
-  }
+  )
   params:set_action("sub_beat_note", function()
     subBeatFreq = MusicUtil.note_num_to_freq(params:get("sub_beat_note"))
+  end
   )
+  params:add{type="option", id="note_output", name="Output", options=note_destinations, default=1, action=function(x) note_output=x
+	  if x==1 then 
+	      params:show('engine_pw')
+	      params:hide('filter_cutoff')
+	    else
+	      params:hide('engine_pw') 
+	      params:hide('filter_cutoff')
+	  end
+	  if x==2 then --samples
+	    params:show('sample_1')
+	    params:show('sample_2')
+	    params:hide('engine_decay')
+	    softcut.enable(1,1)
+	    softcut.enable(2,1)
+	  else 
+	    params:hide('sample_1')
+	    params:hide('sample_2')
+	    params:hide('beat_note') 
+	    params:hide('sub_beat_note') 
+	    softcut.enable(1,0)
+	    softcut.enable(2,0)
+	  end
+	  if x==4 then params:show('midi target') else params:hide('midi target') end
+	  if x==3 then params:show('voice_id') else params:hide('voice_id') end
+	  _menu.rebuild_params()
+  end}
+  params:add_file("sample_1", 'beat sample', "")
+  params:set_action("sample_1", function(x)
+    print("reading sample: "..x)
+    softcut.buffer_clear_channel(1)
+    --file, start_src, start_dst, dur, ch_src, ch_dst
+    softcut.buffer_read_mono(x, 0,0,10, 1,1)
+  end)
+  params:add_file("sample_2", 'sub beat sample', "")
+  params:set_action("sample_2", function(x)
+    softcut.buffer_clear_channel(2)
+    softcut.buffer_read_mono(x, 0,0,10, 1,2)
+  end)
+	nb:add_param("voice_id", "nb voice") -- adds a voice selector param to your script.
+  nb:add_player_params() -- Adds the parameters for the selected voices to your script.
+  
+  --MIDI--
+	midi_device = {} -- container for connected midi devices
+  midi_device_names = {}
+  midi_target = 1
+  for i = 1,#midi.vports do -- query all ports
+    midi_device[i] = midi.connect(i) -- connect each device
+    table.insert(midi_device_names, i..": "..util.trim_string_to_width(midi_device[i].name,80) -- value to insert
+    )
+  end
+  params:add_option("midi target", "MIDI Device",midi_device_names,1)
+  params:set_action("midi target", function(x) midi_target = x end)
+	--END MIDI--
+  
+  decay_spec = controlspec.def{
+    min = 10,
+    max = 2000,
+    warp = 'exp',
+    step = 1,
+    default = 200,
+    units = 'ms',
+    quantum = 0.01,
+    wrap = false,
+  }
+  params:add{
+    type = "control",
+    id = "engine_decay",
+    name = "decay",
+    controlspec = decay_spec,
+    action = function(ms) engine.release(ms / 1000) end
+  }
+  params:add{
+    type = "control",
+    id = "engine_pw",
+    name = "pulse width",
+    controlspec = controlspec.def{min = 50, max = 99, warp = 'lin', step = 1, default = 50, units = '%', quantum = 0.01, wrap = false},
+    action = function(width) engine.pw(width / 100) end
+  }
+  params:add{
+    type = "control",
+    id = "filter_cutoff",
+    name = "cutoff",
+    controlspec = controlspec.FREQ,
+    action = function(freq) engine.cutoff(freq) end
+  }
+  
+  -- here, we set our PSET callbacks for save / load:
+  params.action_write = function(filename,name,number)
+    os.execute("mkdir -p "..norns.state.data.."/"..number.."/")
+    tab.save(rhythmicDisplay,norns.state.data.."/"..number.."/display.data")
+    tab.save(noteEvents,norns.state.data.."/"..number.."/notes.data")
+  end
+  params.action_read = function(filename,silent,number)
+    midi_device[midi_target]:cc(123,0,1) -- all notes off
+    print("finished reading '"..filename.."'", number)
+    note_data = tab.load(norns.state.data.."/"..number.."/display.data")
+    rhythmicDisplay = note_data -- send this restored table to the sequins
+    note_data = tab.load(norns.state.data.."/"..number.."/notes.data")
+    noteEvents = note_data -- send this restored table to the sequins
+    updateCursor()
+    curYPos = math.floor((currentTrack - 1) * (screenHeight / tracksAmount))
+  end
+  params.action_delete = function(filename,name,number)
+    print("finished deleting '"..filename, number)
+    norns.system_cmd("rm -r "..norns.state.data.."/"..number.."/")
+  end
   
   params:bang() -- set defaults using above params
   --end params
@@ -128,7 +273,6 @@ function init()
   mainView = false -- are we adjusting the tempo and levels?
 
   --file = {} --add samples: could be used to load bing samples
-  engine.release(0.1)
 
   g:all(0)  --clear grid
   screenDirty = true -- make sure we draw screen straight away
@@ -307,5 +451,8 @@ function key(k, z)
 end
 
 function cleanup() --------------- cleanup() is automatically called on script close
+  midi_device[midi_target]:cc(123,0,1) -- all notes off
   clock.cancel(redraw_clock_id) -- melt our clock via the id we noted
+  -- should we melt the ticker clock too?
+  clock.cancel(ticker_clock_id)
 end
