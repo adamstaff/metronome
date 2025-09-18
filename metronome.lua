@@ -117,8 +117,30 @@ function init()
       end
     )
   end
-  softcut.buffer(1,1)
-  softcut.buffer(2,2)
+
+-- sc
+    -- clear buffer
+  softcut.buffer_clear()
+  for i=1, 2, 1 do
+    -- enable voices
+    softcut.enable(i,1)
+    -- set voices to buffer
+    softcut.buffer(i,i)
+    -- set voices level to 1.0
+    softcut.level(i,1.0)
+    softcut.level_slew_time(i,0)
+    softcut.pan(i,0)
+    -- voices disable loop
+    softcut.loop(i,0)
+    softcut.loop_start(i, 0)
+    softcut.loop_end(i, 10)
+    softcut.position(I, 0)
+    -- set voices rate to 1.0 and no fade
+    softcut.rate(i, 1.0)
+    softcut.fade_time(i, 0)
+    -- disable voices play
+    softcut.play(i,0)
+  end
 
   --end variables
   
@@ -269,10 +291,6 @@ function init()
   theClock = clock.run(ticker) -- sequencer clock
   clockPosition = 0 -- sequencer position right now. Updated by function 'ticker'
   tick = 1 -- how much to increment each tick. Guess it could be used for double time?
-
-  mainView = false -- are we adjusting the tempo and levels?
-
-  --file = {} --add samples: could be used to load bing samples
 
   g:all(0)  --clear grid
   screenDirty = true -- make sure we draw screen straight away
