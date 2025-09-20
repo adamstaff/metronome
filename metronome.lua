@@ -64,7 +64,6 @@ function play_something(freq, amp, sample)
 		engine.hz(freq) 
 	end
 	if note_output == 2 then --sample
-	  print("playing sample: "..sample.." at amp: "..amp)
 	  softcut.level(sample, amp)
 	  softcut.position(sample, 0)
 	  softcut.play(sample, 1)
@@ -156,7 +155,7 @@ function init()
   params:set_action("lowerNumber", function()
     count.recalculate()
   end)
-  params:add_number("subcount", "Small Count", 1, 128, 4)
+  params:add_number("subcount", "sub count", 1, 128, 4)
   params:set_action("subcount", function()
     count.recalculate()
   end)
@@ -196,7 +195,8 @@ function init()
 	  _menu.rebuild_params()
   end}
 	for i = 1, 2, 1 do
-		if i == 1 then local name = 'beat sample' else local name = 'subbeat sample' end
+	  local name = ''
+		if i == 1 then name = 'beat sample' else name = 'subbeat sample' end
 	  params:add_file("sample_"..i, name, "")
   	params:set_action("sample_"..i, function(x)
 	    print("reading sample: "..x..", to buffer: "..i)
