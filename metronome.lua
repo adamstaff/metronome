@@ -35,17 +35,17 @@ function ticker()
       clockPosition = 0
       beatScreen = 15
       count.number = math.floor((clockPosition / count.barlength) * params:get("upperNumber") + 1)
-			play_something(beatFreq, 1, 1)
+			play_something(beatFreq, beatVol, 1)
     else if math.floor(clockPosition % count.subBeatLength) == 0 then -- we're on a subcount
       --play a big sound
       beatScreen = 6
       count.number = math.floor((clockPosition / count.barlength) * params:get("upperNumber") + 1)
-			play_something(beatFreq, 0.5, 1)
+			play_something(beatFreq, subBeatVol, 1)
     else if math.floor(clockPosition % count.beatLength) == 0 then -- we're on a small beat
       -- play a small sound
       beatScreen = 3
       count.number = math.floor((clockPosition / count.barlength) * params:get("upperNumber") + 1)
-      play_something(subBeatFreq, 0.5, 2)
+      play_something(subBeatFreq, subBeatVol, 2)
     else
       --anything here?
       count.bigBeat = false
@@ -106,7 +106,9 @@ function init()
   count.smallBeat = false
   count.number = 1
   beatFreq = 110
+	beatVol = 1.0
   subBeatFreq = 220
+	subBeatVol = 0.5
   
   --voice variables
   note_destinations = {"engine", "sample", "nb voice", "midi out"}
@@ -160,19 +162,27 @@ function init()
     count.recalculate()
   end)
   params:add_number("beat_note", "beat note", 0, 127, 36,
-    function(param) return MusicUtil.note_num_to_name(param:get(), true) end
-  )
+    function(param) return MusicUtil.note_num_to_name(param:get(), true) end)
   params:set_action("beat_note", function()
     beatFreq = MusicUtil.note_num_to_freq(params:get("beat_note"))
-  end
-  ) 
+  end)
+	params:add{
+    type = "control", id = "beat_volume", name = "b1vol",
+		controlspec = controlspec.dB, action = function(dB) 
+			beatVol = dB
+		end
+  }
   params:add_number("sub_beat_note", "sub beat note", 0, 127, 48,
-    function(param) return MusicUtil.note_num_to_name(param:get(), true) end
-  )
+    function(param) return MusicUtil.note_num_to_name(param:get(), true) end)
   params:set_action("sub_beat_note", function()
     subBeatFreq = MusicUtil.note_num_to_freq(params:get("sub_beat_note"))
-  end
-  )
+  end)
+	params:add{
+    type = "control", id = "sub_beat_volume", name = "b2vol",
+		controlspec = controlspec.dB, action = function(dB) 
+			subBeatVol = dB
+		end
+  }
   params:add{type="option", id="note_output", name="Output", options=note_destinations, default=1, action=function(x) note_output=x
 	  if x==1 then --engine
 	      params:show('engine_pw')
@@ -207,7 +217,6 @@ function init()
 	end
 	nb:add_param("voice_id", "nb voice") -- adds a voice selector param to your script.
   nb:add_player_params() -- Adds the parameters for the selected voices to your script.
-  
   --MIDI--
 	midi_device = {} -- container for connected midi devices
   midi_device_names = {}
@@ -215,7 +224,6 @@ function init()
   for i = 1,#midi.vports do -- query all ports
     midi_device[i] = midi.connect(i) -- connect each device
     table.insert(midi_device_names, i..": "..util.trim_string_to_width(midi_device[i].name,80) -- value to insert
-    )
   end
   params:add_option("midi target", "MIDI Device",midi_device_names,1)
   params:set_action("midi target", function(x) midi_target = x end)
@@ -292,10 +300,14 @@ function drawView()
   screen.move(0,5)
   screen.text(clock.get_tempo())
   --time signature, big nice text
-  screen.move(96,49)
+  screen.font_size(15)
+  screen.font_face(63)
+  screen.move(92,50)
   screen.text(params:get("upperNumber"))
-  screen.move(96,59)
+  screen.move(92,64)
   screen.text(params:get("lowerNumber"))
+  screen.font_face(0)
+  screen.font_size(8)
   
   screen.move(127,5)
 	screen.text_right("subcount: " .. params:get("subcount")) --subcount  
