@@ -13,12 +13,17 @@
 --
 -- Hold K1, turn E1:
 -- adjust norns tempo
+--
+-- See params menu
+-- for many options
+-- including sound, midi
+-- and crow
 
 util = require "util"
 fileselect = require "fileselect"
 MusicUtil = require("musicutil")
 engine.name = 'PolyPerc'
-nb= require "metronome/lib/nb"
+nb = require "metronome/lib/nb"
 
 local g
 g = grid.connect()
@@ -106,7 +111,6 @@ function init()
   
   --voice variables
   note_destinations = {"engine", "sample", "nb voice", "midi out"}
-	note_output = 1
   function play_midi_note(note, duration, velocity)  
     midi_device[midi_target]:note_on(note, velocity)
     local note_time = clock.get_beat_sec() * duration * 4 - 0.01
@@ -118,27 +122,25 @@ function init()
     )
   end
 
--- sc
-    -- clear buffer
+	-- softcut variables
+  -- clear buffer
   softcut.buffer_clear()
   for i=1, 2, 1 do
-    -- enable voices
+    -- global
     softcut.enable(i,1)
-    -- set voices to buffer
     softcut.buffer(i,i)
-    -- set voices level to 1.0
+    -- level
     softcut.level(i,1.0)
     softcut.level_slew_time(i,0)
+		softcut.fade_time(i, 0)
     softcut.pan(i,0)
-    -- voices disable loop
+    -- time
     softcut.loop(i,0)
     softcut.loop_start(i, 0)
     softcut.loop_end(i, 10)
-    softcut.position(I, 0)
-    -- set voices rate to 1.0 and no fade
+    softcut.position(i, 0)
     softcut.rate(i, 1.0)
-    softcut.fade_time(i, 0)
-    -- disable voices play
+    -- stop
     softcut.play(i,0)
   end
 
@@ -173,9 +175,9 @@ function init()
   end
   )
   params:add{type="option", id="note_output", name="Output", options=note_destinations, default=1, action=function(x) note_output=x
-	  if x==1 then 
+	  if x==1 then --engine
 	      params:show('engine_pw')
-	      params:hide('filter_cutoff')
+	      params:show('filter_cutoff')
 	    else
 	      params:hide('engine_pw') 
 	      params:hide('filter_cutoff')
@@ -184,32 +186,25 @@ function init()
 	    params:show('sample_1')
 	    params:show('sample_2')
 	    params:hide('engine_decay')
-	    softcut.enable(1,1)
-	    softcut.enable(2,1)
 	  else 
 	    params:hide('sample_1')
 	    params:hide('sample_2')
-	    params:hide('beat_note') 
-	    params:hide('sub_beat_note') 
-	    softcut.enable(1,0)
-	    softcut.enable(2,0)
+			params:show('engine_decay') 
 	  end
-	  if x==4 then params:show('midi target') else params:hide('midi target') end
 	  if x==3 then params:show('voice_id') else params:hide('voice_id') end
+	  if x==4 then params:show('midi target') else params:hide('midi target') end
 	  _menu.rebuild_params()
   end}
-  params:add_file("sample_1", 'beat sample', "")
-  params:set_action("sample_1", function(x)
-    print("reading sample: "..x)
-    softcut.buffer_clear_channel(1)
-    --file, start_src, start_dst, dur, ch_src, ch_dst
-    softcut.buffer_read_mono(x, 0,0,10, 1,1)
-  end)
-  params:add_file("sample_2", 'sub beat sample', "")
-  params:set_action("sample_2", function(x)
-    softcut.buffer_clear_channel(2)
-    softcut.buffer_read_mono(x, 0,0,10, 1,2)
-  end)
+	for i = 1, 2, 1 do
+		if i == 1 then local name = 'beat sample' else local name = 'subbeat sample' end
+	  params:add_file("sample_"..i, name, "")
+  	params:set_action("sample_"..i, function(x)
+	    print("reading sample: "..x..", to buffer: "..i)
+    	softcut.buffer_clear_channel(i)
+    	--file, start_src, start_dst, dur, ch_src, ch_dst
+    	softcut.buffer_read_mono(x, 0,0,10, 1,i)
+  	end)
+	end
 	nb:add_param("voice_id", "nb voice") -- adds a voice selector param to your script.
   nb:add_player_params() -- Adds the parameters for the selected voices to your script.
   
@@ -227,35 +222,21 @@ function init()
 	--END MIDI--
   
   decay_spec = controlspec.def{
-    min = 10,
-    max = 2000,
-    warp = 'exp',
-    step = 1,
-    default = 200,
-    units = 'ms',
-    quantum = 0.01,
-    wrap = false,
+    min = 10, max = 2000, warp = 'exp', step = 1,
+    default = 200, units = 'ms', quantum = 0.01, wrap = false,
   }
   params:add{
-    type = "control",
-    id = "engine_decay",
-    name = "decay",
-    controlspec = decay_spec,
-    action = function(ms) engine.release(ms / 1000) end
+    type = "control", id = "engine_decay", name = "decay",
+    controlspec = decay_spec, action = function(ms) engine.release(ms / 1000) end
   }
   params:add{
-    type = "control",
-    id = "engine_pw",
-    name = "pulse width",
+    type = "control", id = "engine_pw", name = "pulse width",
     controlspec = controlspec.def{min = 50, max = 99, warp = 'lin', step = 1, default = 50, units = '%', quantum = 0.01, wrap = false},
     action = function(width) engine.pw(width / 100) end
   }
   params:add{
-    type = "control",
-    id = "filter_cutoff",
-    name = "cutoff",
-    controlspec = controlspec.FREQ,
-    action = function(freq) engine.cutoff(freq) end
+    type = "control", id = "filter_cutoff", name = "cutoff",
+		controlspec = controlspec.FREQ, action = function(freq) engine.cutoff(freq) end
   }
   
   -- here, we set our PSET callbacks for save / load:
@@ -305,12 +286,11 @@ function drawView()
   screen.rect(0,0,127,63)
   screen.fill()
   
-  --draw white or black text
+  --set level for all the following drawing
   screen.level(15 - beatScreen)
-  
+  --tempo
   screen.move(0,5)
   screen.text(clock.get_tempo())
-  
   --time signature, big nice text
   screen.move(96,49)
   screen.text(params:get("upperNumber"))
@@ -318,16 +298,8 @@ function drawView()
   screen.text(params:get("lowerNumber"))
   
   screen.move(127,5)
-  if mainView then
-    screen.text_right("tempo: " .. clock.get_tempo()) --tempo
-    else 
-    screen.text_right("subcount: " .. params:get("subcount")) --subcount
-  end
-  
+	screen.text_right("subcount: " .. params:get("subcount")) --subcount  
   --count
-  --programmatically, draw text representing the counts in the count
-  -- e.g. ONE two three FOUR five
-  --etc
   screen.stroke()
   screen.level(1)
   if not isPlaying then
@@ -420,42 +392,29 @@ function redraw()
 end
 
 function enc(e, d)
-
   if e == 1 then 
-    if heldKeys[1] then
+    if heldKeys[1] then --set tempo
       params:set("clock_tempo", clock.get_tempo() + d)
-    else
+    else --set subcount
       local sc = params:get("subcount") + d
       params:set("subcount", sc)
     end
+	end
+  if e == 2 then --set upper number
+    params:set("upperNumber", params:get("upperNumber") + d)
+    if params:get("subcount") > params:get("upperNumber") then params:set("subcount", params:get("upperNumber")) end
   end
-  
-  if e == 2 then
-    if mainView then
-    -- set big beat playback sound
-    else
-      params:set("upperNumber", params:get("upperNumber") + d)
-      if params:get("subcount") > params:get("upperNumber") then params:set("subcount", params:get("upperNumber")) end
-    end
+  if e == 3 then --set lower number
+    params:set("lowerNumber", params:get("lowerNumber") + d)
   end
-  
-  if e == 3 then
-    if mainView then
-      --set small beat playback sound
-    else 
-      params:set("lowerNumber", params:get("lowerNumber") + d)
-    end
-  end
-  
-  screen_dirty = true
-  
+	if not isPlaying then
+	  screen_dirty = true
+	end
 end
 
 function key(k, z)
-  
-  heldKeys[k] = z == 1
-  
-  if k == 2 or 3 then
+  heldKeys[k] = z == 1 --test and store held keys
+  if k == 2 or 3 then --start/stop
     if z == 1 then
       if isPlaying then isPlaying = false
         clockPosition = 0
@@ -463,9 +422,9 @@ function key(k, z)
         clock.run(ticker) end
     end
   end
-
-  screen_dirty = true
-
+	if not isPlaying then
+	  screen_dirty = true
+	end
 end
 
 function cleanup() --------------- cleanup() is automatically called on script close
