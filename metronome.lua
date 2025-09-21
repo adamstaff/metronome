@@ -16,8 +16,6 @@
 --
 -- See params menu
 -- for many options
--- including sound, midi
--- and crow
 
 util = require "util"
 fileselect = require "fileselect"
@@ -73,7 +71,7 @@ function play_something(freq, amp, sample)
     player:play_note(MusicUtil.freq_to_note_num(freq), amp, params:get("engine_decay") / 1000)
       end
 	if note_output == 4 then --MIDI
-		play_midi_note(MusicUtil.freq_to_note_num(freq), math.floor(64 * amp), params:get("engine_decay") / 1000)
+		play_midi_note(MusicUtil.freq_to_note_num(freq), params:get("engine_decay") / 1000, math.floor(127 * amp))
 	end
 end
 
@@ -148,12 +146,13 @@ function init()
   --end variables
   
   -- start params
-  params:add_separator("Metronome")
-  params:add_number("upperNumber", "Upper Number", 1, 128, 4)
+  params:add_separator("metronome")
+  params:add_binary("flash", "flash", "toggle", 1)
+  params:add_number("upperNumber", "upper number", 1, 128, 4)
   params:set_action("upperNumber", function()
     count.recalculate()
   end)
-  params:add_number("lowerNumber", "Lower Number", 1, 32, 4)
+  params:add_number("lowerNumber", "lower number", 1, 32, 4)
   params:set_action("lowerNumber", function()
     count.recalculate()
   end)
@@ -167,9 +166,9 @@ function init()
     beatFreq = MusicUtil.note_num_to_freq(params:get("beat_note"))
   end)
 	params:add{
-    type = "control", id = "beat_volume", name = "b1vol",
-		controlspec = controlspec.dB, action = function(dB) 
-			beatVol = dB
+    type = "control", id = "beat_volume", name = "beat volume",
+		controlspec = controlspec.DB, action = function(dB) 
+			beatVol = util.dbamp(dB)
 		end
   }
   params:add_number("sub_beat_note", "sub beat note", 0, 127, 48,
@@ -178,12 +177,13 @@ function init()
     subBeatFreq = MusicUtil.note_num_to_freq(params:get("sub_beat_note"))
   end)
 	params:add{
-    type = "control", id = "sub_beat_volume", name = "b2vol",
-		controlspec = controlspec.dB, action = function(dB) 
-			subBeatVol = dB
+    type = "control", id = "sub_beat_volume", name = "sub beat volume",
+		controlspec = controlspec.DB, action = function(dB) 
+			subBeatVol = util.dbamp(dB)
 		end
   }
-  params:add{type="option", id="note_output", name="Output", options=note_destinations, default=1, action=function(x) note_output=x
+  params:add_separator("output")
+  params:add{type="option", id="note_output", name="output type", options=note_destinations, default=1, action=function(x) note_output=x
 	  if x==1 then --engine
 	      params:show('engine_pw')
 	      params:show('filter_cutoff')
@@ -223,7 +223,7 @@ function init()
   midi_target = 1
   for i = 1,#midi.vports do -- query all ports
     midi_device[i] = midi.connect(i) -- connect each device
-    table.insert(midi_device_names, i..": "..util.trim_string_to_width(midi_device[i].name,80) -- value to insert
+    table.insert(midi_device_names, i..": "..util.trim_string_to_width(midi_device[i].name,80)) -- value to insert
   end
   params:add_option("midi target", "MIDI Device",midi_device_names,1)
   params:set_action("midi target", function(x) midi_target = x end)
@@ -269,8 +269,10 @@ function init()
   end
   
   params:bang() -- set defaults using above params
+  params:set("beat_volume", -6)
+  params:set("sub_beat_volume", -12)
   --end params
-
+  
   --drawing stuff
   beatScreen = 0 --screen level: set to 15 when the metronome pings to flash the screen
   heldKeys = {false, false, false}
@@ -290,28 +292,41 @@ end
 function drawView()
 
   --draw black or white background
-  screen.level(beatScreen)
-  screen.rect(0,0,127,63)
-  screen.fill()
+  if params:get("flash") == 1 then
+    screen.level(beatScreen)
+    screen.rect(0,0,127,63)
+    screen.fill()
+  end
   
   --set level for all the following drawing
-  screen.level(15 - beatScreen)
+  if params:get("flash") == 1 then
+    screen.level(15 - beatScreen)
+    else screen.level(15)
+  end
   --tempo
   screen.move(0,5)
-  screen.text(clock.get_tempo())
+  if heldKeys[1] then
+    screen.text("subcount: " .. params:get("subcount")) --subcount
+  else screen.text(clock.get_tempo().." bpm")
+  end
   --time signature, big nice text
   screen.font_size(15)
-  screen.font_face(63)
-  screen.move(92,50)
-  screen.text(params:get("upperNumber"))
-  screen.move(92,64)
+  screen.font_face(8)
+  screen.move(108,64)
+  screen.text_center("/")
+  screen.move_rel(1,0)
   screen.text(params:get("lowerNumber"))
+  screen.move(103,64)
+  screen.text_right(params:get("upperNumber"))
+  --big count
+  screen.move(92,36)
+  screen.font_size(35)
+  if not isPlaying then screen.level(3) end
+  screen.text_center(count.number)
   screen.font_face(0)
   screen.font_size(8)
   
-  screen.move(127,5)
-	screen.text_right("subcount: " .. params:get("subcount")) --subcount  
-  --count
+  --circle
   screen.stroke()
   screen.level(1)
   if not isPlaying then
@@ -333,12 +348,9 @@ function drawView()
     screen.arc(32,36,25, 2*math.pi * (i / params:get("upperNumber")) - (math.pi/2), 2*math.pi * (i / params:get("upperNumber")) - (math.pi/2) + 0.05)
     screen.stroke()
   end
-  screen.move(96,20)
-  screen.text(count.number)
-  screen.move(80,32)
+  --[[screen.move(80,32)
   if isPlaying then screen.text("playing")
-  else screen.text("stopped") end 
-  
+  else screen.text("stopped") end ]]--
   screen.fill()
 
   if beatScreen > 0 then 
@@ -405,11 +417,11 @@ end
 
 function enc(e, d)
   if e == 1 then 
-    if heldKeys[1] then --set tempo
-      params:set("clock_tempo", clock.get_tempo() + d)
-    else --set subcount
+    if heldKeys[1] then --set subcount
       local sc = params:get("subcount") + d
       params:set("subcount", sc)
+    else --set tempo
+      params:set("clock_tempo", clock.get_tempo() + d)
     end
 	end
   if e == 2 then --set upper number
@@ -426,13 +438,14 @@ end
 
 function key(k, z)
   heldKeys[k] = z == 1 --test and store held keys
-  if k == 2 or 3 then --start/stop
-    if z == 1 then
+  if k == 1 then screen_dirty = true return end
+  if k == 2 and z == 1 or 3 and z == 1 then --start/stop
+--    if z == 1 then
       if isPlaying then isPlaying = false
         clockPosition = 0
       else isPlaying = true 
         clock.run(ticker) end
-    end
+  --  end
   end
 	if not isPlaying then
 	  screen_dirty = true
