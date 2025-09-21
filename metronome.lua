@@ -247,27 +247,6 @@ function init()
 		controlspec = controlspec.FREQ, action = function(freq) engine.cutoff(freq) end
   }
   
-  -- here, we set our PSET callbacks for save / load:
-  params.action_write = function(filename,name,number)
-    os.execute("mkdir -p "..norns.state.data.."/"..number.."/")
-    tab.save(rhythmicDisplay,norns.state.data.."/"..number.."/display.data")
-    tab.save(noteEvents,norns.state.data.."/"..number.."/notes.data")
-  end
-  params.action_read = function(filename,silent,number)
-    midi_device[midi_target]:cc(123,0,1) -- all notes off
-    print("finished reading '"..filename.."'", number)
-    note_data = tab.load(norns.state.data.."/"..number.."/display.data")
-    rhythmicDisplay = note_data -- send this restored table to the sequins
-    note_data = tab.load(norns.state.data.."/"..number.."/notes.data")
-    noteEvents = note_data -- send this restored table to the sequins
-    updateCursor()
-    curYPos = math.floor((currentTrack - 1) * (screenHeight / tracksAmount))
-  end
-  params.action_delete = function(filename,name,number)
-    print("finished deleting '"..filename, number)
-    norns.system_cmd("rm -r "..norns.state.data.."/"..number.."/")
-  end
-  
   params:bang() -- set defaults using above params
   params:set("beat_volume", -6)
   params:set("sub_beat_volume", -12)
