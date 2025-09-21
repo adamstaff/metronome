@@ -78,7 +78,7 @@ end
 function redraw_clock() ----- a clock that draws space
   while true do ------------- "while true do" means "do this forever"
     clock.sleep(1/60) ------- pause for a fifteenth of a second (aka 15fps)
-    if screen_dirty or isPlaying then ---- only if something changed
+    if screen_dirty or isPlaying or beatScreen > 0 then ---- only if something changed
       redraw() -------------- redraw space
       screen_dirty = false -- and everything is clean again
     end
@@ -273,7 +273,7 @@ function drawView()
   --draw black or white background
   if params:get("flash") == 1 then
     screen.level(beatScreen)
-    screen.rect(0,0,127,63)
+    screen.rect(0,0,128,64)
     screen.fill()
   end
   
@@ -435,5 +435,5 @@ function cleanup() --------------- cleanup() is automatically called on script c
   midi_device[midi_target]:cc(123,0,1) -- all notes off
   clock.cancel(redraw_clock_id) -- melt our clock via the id we noted
   -- should we melt the ticker clock too?
-  clock.cancel(ticker_clock_id)
+  --clock.cancel(ticker_clock_id)
 end
